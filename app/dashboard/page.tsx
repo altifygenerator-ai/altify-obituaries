@@ -42,12 +42,9 @@ export default function Dashboard() {
     }));
   };
 
-  // 📄 autofill from PDF
+  // 📄 PDF Upload → Autofill
   const handleUpload = async () => {
-    if (!file) {
-      alert("Select a PDF first");
-      return;
-    }
+    if (!file) return alert("Select a PDF");
 
     setUploading(true);
 
@@ -85,54 +82,47 @@ export default function Dashboard() {
     }
   };
 
-  // 🤖 generate obituary
-  const handleGenerate = async () => {
-    if (!session?.access_token) {
-      alert("Login required");
+  // 🤖 Generate obituary
+ const handleGenerate = async () => {
+  setLoading(true);
+
+  try {
+    const formData = new FormData();
+
+    formData.append("full_name", structured.full_name || "");
+    formData.append("age", structured.age || "");
+    formData.append("date_of_birth", structured.date_of_birth || "");
+    formData.append("date_of_death", structured.date_of_death || "");
+    formData.append("life_summary", structured.life_summary || "");
+
+    const res = await fetch("/api/generate", {
+      method: "POST",
+      body: formData, // ✅ THIS IS CRITICAL
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      alert(data.error || "Generate failed");
       return;
     }
 
-    setLoading(true);
+    setResult(data.obituary);
 
-    try {
-      const formData = new FormData();
-      formData.append("text", JSON.stringify(structured));
-
-      const res = await fetch("/api/generate", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: formData,
-      });
-
-      const data = await res.json();
-
-      if (res.status === 403) {
-        alert("Free limit reached");
-        return;
-      }
-
-      setResult(data.obituary || "");
-
-    } catch (err) {
-      console.error(err);
-      alert("Generation failed");
-    } finally {
-      setLoading(false);
-    }
-  };
+  } catch (err) {
+    console.error(err);
+    alert("Generate failed");
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
-    <div style={styles.container}>
-      <h1 style={styles.title}>Altify Obituaries</h1>
+    <div style={{ maxWidth: 700, margin: "0 auto", padding: 20 }}>
+      <h1>Altify Obituaries</h1>
 
-      <p style={styles.subtitle}>
-        Upload a PDF or enter details manually to generate an obituary.
-      </p>
-
-      {/* Upload */}
-      <div style={styles.uploadRow}>
+      {/* 📄 Upload */}
+      <div style={{ marginBottom: 20 }}>
         <input
           type="file"
           accept="application/pdf"
@@ -144,8 +134,8 @@ export default function Dashboard() {
         </button>
       </div>
 
-      {/* Form */}
-      <div style={styles.form}>
+      {/* ✍️ Manual Form */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         <input
           placeholder="Full Name"
           value={structured.full_name}
@@ -161,35 +151,48 @@ export default function Dashboard() {
         <input
           placeholder="Date of Birth"
           value={structured.date_of_birth}
-          onChange={(e) => handleChange("date_of_birth", e.target.value)}
+          onChange={(e) =>
+            handleChange("date_of_birth", e.target.value)
+          }
         />
 
         <input
           placeholder="Date of Death"
           value={structured.date_of_death}
-          onChange={(e) => handleChange("date_of_death", e.target.value)}
+          onChange={(e) =>
+            handleChange("date_of_death", e.target.value)
+          }
         />
 
         <textarea
           placeholder="Life Summary"
           value={structured.life_summary}
-          onChange={(e) => handleChange("life_summary", e.target.value)}
+          onChange={(e) =>
+            handleChange("life_summary", e.target.value)
+          }
           rows={5}
         />
       </div>
 
-      {/* Generate */}
+      {/* 🤖 Generate */}
       <button
         onClick={handleGenerate}
         disabled={loading}
-        style={styles.generateBtn}
+        style={{ marginTop: 20 }}
       >
         {loading ? "Generating..." : "Generate Obituary"}
       </button>
 
-      {/* Result */}
+      {/* 📜 Result */}
       {result && (
-        <div style={styles.resultBox}>
+        <div
+          style={{
+            marginTop: 20,
+            padding: 15,
+            background: "#f5f5f5",
+            borderRadius: 8,
+          }}
+        >
           <h3>Generated Obituary</h3>
           <p style={{ whiteSpace: "pre-wrap" }}>{result}</p>
         </div>
@@ -197,39 +200,3 @@ export default function Dashboard() {
     </div>
   );
 }
-
-// 🎨 Simple clean styles
-const styles = {
-  container: {
-    maxWidth: 700,
-    margin: "0 auto",
-    padding: 20,
-    fontFamily: "sans-serif",
-  },
-  title: {
-    marginBottom: 10,
-  },
-  subtitle: {
-    color: "#555",
-    marginBottom: 20,
-  },
-  uploadRow: {
-    display: "flex",
-    gap: 10,
-    marginBottom: 20,
-  },
-  form: {
-    display: "flex",
-    flexDirection: "column" as const,
-    gap: 10,
-  },
-  generateBtn: {
-    marginTop: 20,
-  },
-  resultBox: {
-    marginTop: 20,
-    padding: 15,
-    background: "#f5f5f5",
-    borderRadius: 8,
-  },
-};

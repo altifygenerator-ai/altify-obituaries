@@ -5,44 +5,28 @@ export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
   try {
-    const supabase = createServerSupabase();
+    const formData = await req.formData();
 
-    const authHeader = req.headers.get("authorization");
-    if (!authHeader) {
-      return NextResponse.json({ error: "Not logged in" }, { status: 401 });
-    }
+    const full_name = formData.get("full_name") as string;
+    const age = formData.get("age") as string;
+    const date_of_birth = formData.get("date_of_birth") as string;
+    const date_of_death = formData.get("date_of_death") as string;
+    const life_summary = formData.get("life_summary") as string;
 
-    const token = authHeader.replace("Bearer ", "");
-    const {
-      data: { user },
-    } = await supabase.auth.getUser(token);
-
-    if (!user) {
-      return NextResponse.json({ error: "Invalid user" }, { status: 401 });
-    }
-
-    const { data: profile } = await supabase
-      .from("users")
-      .select("usage_count, subscription_status")
-      .eq("id", user.id)
-      .single();
-
-    const usage = profile?.usage_count || 0;
-    const isPro = profile?.subscription_status === "active";
-
-    if (!isPro && usage >= 3) {
+    if (!full_name || !life_summary) {
       return NextResponse.json(
-        { error: "Free limit reached" },
-        { status: 403 }
+        { error: "Missing required fields" },
+        { status: 400 }
       );
     }
 
-    const formData = await req.formData();
-    const text = formData.get("text") as string;
-
-    if (!text) {
-      return NextResponse.json({ error: "Missing input" }, { status: 400 });
-    }
+    const prompt = `
+Name: ${full_name}
+Age: ${age}
+Date of Birth: ${date_of_birth}
+Date of Death: ${date_of_death}
+Life Summary: ${life_summary}
+`;
 
     const aiRes = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
@@ -58,41 +42,41 @@ export async function POST(req: NextRequest) {
             content: `
 You are a professional obituary writer.
 
-Write a respectful, compassionate, and well-structured obituary.
+Write a meaningful obituary:
 - 3–5 paragraphs
-- Include personality, life story, and legacy
+- Warm, respectful tone
+- Include life story and legacy
 - Avoid clichés
-- Make it feel human and personal
 `,
           },
-          { role: "user", content: text },
+          {
+            role: "user",
+            content: prompt,
+          },
         ],
       }),
     });
 
-    if (!aiRes.ok) {
-      const errorText = await aiRes.text();
-      console.error("OpenAI Error:", errorText);
-      return NextResponse.json({ error: "AI generation failed" }, { status: 500 });
-    }
-
     const data = await aiRes.json();
 
-    const obituary = data.choices?.[0]?.message?.content || "";
-
-    if (!obituary) {
-      return NextResponse.json({ error: "No content generated" }, { status: 500 });
+    if (!aiRes.ok) {
+      console.error("AI ERROR:", data);
+      return NextResponse.json(
+        { error: "AI generation failed" },
+        { status: 500 }
+      );
     }
 
-    await supabase
-      .from("users")
-      .update({ usage_count: usage + 1 })
-      .eq("id", user.id);
+    const obituary =
+      data?.choices?.[0]?.message?.content || "";
 
     return NextResponse.json({ obituary });
 
   } catch (err) {
-    console.error(err);
-    return NextResponse.json({ error: "Server error" }, { status: 500 });
+    console.error("GENERATE ERROR:", err);
+    return NextResponse.json(
+      { error: "Server error" },
+      { status: 500 }
+    );
   }
 }
